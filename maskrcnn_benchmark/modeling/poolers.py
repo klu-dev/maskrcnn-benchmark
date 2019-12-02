@@ -85,9 +85,12 @@ class Pooler(nn.Module):
             ],
             dim=0,
         )
+        # Kail [Image_idx, x, y, x, y]
         rois = torch.cat([ids, concat_boxes], dim=1)
         return rois
 
+    # Kail x [features=5][N, C, H, W]
+    # Kail boxes [N][Samples]
     def forward(self, x, boxes):
         """
         Arguments:
@@ -97,10 +100,12 @@ class Pooler(nn.Module):
             result (Tensor)
         """
         num_levels = len(self.poolers)
+        # Kail (N*Samples, 5) [Image_idx, x, y, x, y]
         rois = self.convert_to_roi_format(boxes)
         if num_levels == 1:
             return self.poolers[0](x[0], rois)
 
+        # Kail [N * Samples]
         levels = self.map_levels(boxes)
 
         num_rois = len(rois)
@@ -113,6 +118,7 @@ class Pooler(nn.Module):
             dtype=dtype,
             device=device,
         )
+        # Kail Assign rois to corresponding feature level
         for level, (per_level_feature, pooler) in enumerate(zip(x, self.poolers)):
             idx_in_level = torch.nonzero(levels == level).squeeze(1)
             rois_per_level = rois[idx_in_level]

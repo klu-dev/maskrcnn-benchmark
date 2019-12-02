@@ -142,6 +142,7 @@ class ResNet(nn.Module):
             for p in m.parameters():
                 p.requires_grad = False
 
+    # Kail x [N, C, H, W]
     def forward(self, x):
         outputs = []
         x = self.stem(x)

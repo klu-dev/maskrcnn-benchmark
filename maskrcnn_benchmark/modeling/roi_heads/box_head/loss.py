@@ -38,6 +38,7 @@ class FastRCNNLossComputation(object):
 
     def match_targets_to_proposals(self, proposal, target):
         match_quality_matrix = boxlist_iou(target, proposal)
+        # Kail target idx for proposal
         matched_idxs = self.proposal_matcher(match_quality_matrix)
         # Fast RCNN only need "labels" field for selecting the targets
         target = target.copy_with_fields("labels")
@@ -49,10 +50,16 @@ class FastRCNNLossComputation(object):
         matched_targets.add_field("matched_idxs", matched_idxs)
         return matched_targets
 
+    # Kail similar to loss in RPN
+    # Kail proposals [Images_idx=N][BoxList]
+    # Kail corelate target to anchors according to IOU with targets
+    # Kail label anchor
+    # Kail conver target box to transform invariant values
     def prepare_targets(self, proposals, targets):
         labels = []
         regression_targets = []
         for proposals_per_image, targets_per_image in zip(proposals, targets):
+            # Kail target corresponding to every proposal
             matched_targets = self.match_targets_to_proposals(
                 proposals_per_image, targets_per_image
             )
@@ -79,6 +86,8 @@ class FastRCNNLossComputation(object):
 
         return labels, regression_targets
 
+    # Kail proposals [N][fpnTopN + C, 4]
+    # Kail targets [N][C, 4]
     def subsample(self, proposals, targets):
         """
         This method performs the positive/negative sampling, and return
@@ -90,7 +99,11 @@ class FastRCNNLossComputation(object):
             targets (list[BoxList])
         """
 
+        # Kail Important: get labels and regression_targets of proposals, then sample.
+        # Kail labels [Images][N, 1] on all prososals
+        # Kail encoded boxes on all proposals [Images][N, 4]
         labels, regression_targets = self.prepare_targets(proposals, targets)
+        # Kail return mask [Images][N] not change the dim size
         sampled_pos_inds, sampled_neg_inds = self.fg_bg_sampler(labels)
 
         proposals = list(proposals)
@@ -112,9 +125,12 @@ class FastRCNNLossComputation(object):
             proposals_per_image = proposals[img_idx][img_sampled_inds]
             proposals[img_idx] = proposals_per_image
 
+        # Kail [Images][ROI_HEADS.BATCH_SIZE_PER_IMAGE, 4]
         self._proposals = proposals
         return proposals
 
+    # Kail class_logits [N * 1000, num_classes]
+    # Kail box_regression [N * 1000, num_classes * 4]
     def __call__(self, class_logits, box_regression):
         """
         Computes the loss for Faster R-CNN.
@@ -129,7 +145,9 @@ class FastRCNNLossComputation(object):
             box_loss (Tensor)
         """
 
+        # Kail [N * 1000, num_classes]
         class_logits = cat(class_logits, dim=0)
+        # Kail [N * 1000, num_classes * 4]
         box_regression = cat(box_regression, dim=0)
         device = class_logits.device
 
@@ -138,7 +156,9 @@ class FastRCNNLossComputation(object):
 
         proposals = self._proposals
 
+        # Kail [Images * ROI_HEADS.BATCH_SIZE_PER_IMAGE, 1]
         labels = cat([proposal.get_field("labels") for proposal in proposals], dim=0)
+        # Kail [Images * ROI_HEADS.BATCH_SIZE_PER_IMAGE, 4]
         regression_targets = cat(
             [proposal.get_field("regression_targets") for proposal in proposals], dim=0
         )
@@ -148,7 +168,9 @@ class FastRCNNLossComputation(object):
         # get indices that correspond to the regression targets for
         # the corresponding ground truth labels, to be used with
         # advanced indexing
+        # Kail box idx of proposal
         sampled_pos_inds_subset = torch.nonzero(labels > 0).squeeze(1)
+        # Kail class idx of target
         labels_pos = labels[sampled_pos_inds_subset]
         if self.cls_agnostic_bbox_reg:
             map_inds = torch.tensor([4, 5, 6, 7], device=device)
@@ -157,7 +179,9 @@ class FastRCNNLossComputation(object):
                 [0, 1, 2, 3], device=device)
 
         box_loss = smooth_l1_loss(
+            # Kail [positive labels, 4]
             box_regression[sampled_pos_inds_subset[:, None], map_inds],
+            # Kail [positive labels, 4]
             regression_targets[sampled_pos_inds_subset],
             size_average=False,
             beta=1,

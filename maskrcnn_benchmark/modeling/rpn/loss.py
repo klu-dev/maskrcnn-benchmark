@@ -40,7 +40,9 @@ class RPNLossComputation(object):
         self.discard_cases = ['not_visibility', 'between_thresholds']
 
     def match_targets_to_anchors(self, anchor, target, copied_fields=[]):
+        # Kail [M, N]
         match_quality_matrix = boxlist_iou(target, anchor)
+        # Kail [N] target indx for every anchor
         matched_idxs = self.proposal_matcher(match_quality_matrix)
         # RPN doesn't need any fields from target
         # for creating the labels, so clear them all
@@ -51,12 +53,19 @@ class RPNLossComputation(object):
         # out of bounds
         matched_targets = target[matched_idxs.clamp(min=0)]
         matched_targets.add_field("matched_idxs", matched_idxs)
+        # Kail targets matched to anchors
         return matched_targets
 
+    # Kail anchors [Images_idx=N][BoxList]
+    # Kail corelate target to anchors according to IOU with targets
+    # Kail label anchor
+    # Kail conver target box to transform invariant values
     def prepare_targets(self, anchors, targets):
         labels = []
         regression_targets = []
         for anchors_per_image, targets_per_image in zip(anchors, targets):
+            # Kail anchors[N] targets[M]
+            # Kail matched_targets [N]
             matched_targets = self.match_targets_to_anchors(
                 anchors_per_image, targets_per_image, self.copied_fields
             )
@@ -86,9 +95,13 @@ class RPNLossComputation(object):
             labels.append(labels_per_image)
             regression_targets.append(regression_targets_per_image)
 
+        # Kail labels [Images][N, 1] regression_targets [Images][N, 4]
         return labels, regression_targets
 
 
+    # Kail anchors [Images_idx=N][features_idx=5][BoxList]
+    # Kail objectness [features_idx=5][N, A, H, W]
+    # Kail box_regression [features_idx=5][N, A * 4, H, W]
     def __call__(self, anchors, objectness, box_regression, targets):
         """
         Arguments:
@@ -101,20 +114,29 @@ class RPNLossComputation(object):
             objectness_loss (Tensor)
             box_loss (Tensor)
         """
+        # Kail anchors [Images_idx=N][BoxList]
         anchors = [cat_boxlist(anchors_per_image) for anchors_per_image in anchors]
+        # Kail Important: get labels and regression_targets of anchors, then sample.
+        # Kail labels [Images][N, 1] on all anchors
+        # Kail encoded boxes on all anchors [Images][N, 4]
         labels, regression_targets = self.prepare_targets(anchors, targets)
+        # Kail return mask [Images][N]
         sampled_pos_inds, sampled_neg_inds = self.fg_bg_sampler(labels)
         sampled_pos_inds = torch.nonzero(torch.cat(sampled_pos_inds, dim=0)).squeeze(1)
         sampled_neg_inds = torch.nonzero(torch.cat(sampled_neg_inds, dim=0)).squeeze(1)
 
         sampled_inds = torch.cat([sampled_pos_inds, sampled_neg_inds], dim=0)
 
+        # Kail objectness convert to [-1, 1]
+        # Kail box_regression [-1, 4]
         objectness, box_regression = \
                 concat_box_prediction_layers(objectness, box_regression)
 
         objectness = objectness.squeeze()
 
+        # Kail [Images * N, 1]
         labels = torch.cat(labels, dim=0)
+        # Kail [Images * N, 4]
         regression_targets = torch.cat(regression_targets, dim=0)
 
         box_loss = smooth_l1_loss(

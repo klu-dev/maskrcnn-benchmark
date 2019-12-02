@@ -47,6 +47,7 @@ class FPNPredictor(nn.Module):
         for l in [self.cls_score, self.bbox_pred]:
             nn.init.constant_(l.bias, 0)
 
+    # Kail x [N * 1000, 1024]
     def forward(self, x):
         if x.ndimension() == 4:
             assert list(x.shape[2:]) == [1, 1]

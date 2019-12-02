@@ -40,6 +40,7 @@ class FPN(nn.Module):
             self.layer_blocks.append(layer_block)
         self.top_blocks = top_blocks
 
+    # Kail [features_idx=4][N, C, H, W]
     def forward(self, x):
         """
         Arguments:

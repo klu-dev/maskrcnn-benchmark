@@ -21,6 +21,8 @@ class ROIBoxHead(torch.nn.Module):
         self.post_processor = make_roi_box_post_processor(cfg)
         self.loss_evaluator = make_roi_box_loss_evaluator(cfg)
 
+    # Kail features [features=5][N, C, H, W]
+    # Kail proposals [N][fpnTopN + C, 4]
     def forward(self, features, proposals, targets=None):
         """
         Arguments:
@@ -40,15 +42,20 @@ class ROIBoxHead(torch.nn.Module):
             # Faster R-CNN subsamples during training the proposals with a fixed
             # positive / negative ratio
             with torch.no_grad():
+                # Kail Note: proposals sampled and size change for training
                 proposals = self.loss_evaluator.subsample(proposals, targets)
 
         # extract features that will be fed to the final classifier. The
         # feature_extractor generally corresponds to the pooler + heads
+        # Kail Test [N * 1000, 1024] Train [N*Samples, 1024]
         x = self.feature_extractor(features, proposals)
         # final classifier that converts the features into predictions
+        # Kail Test [N * 1000, num_classes] [N * 1000, num_classes * 4]
+        # Kail Train [N * Samples, num_classes] [N * Samples, num_classes * 4]
         class_logits, box_regression = self.predictor(x)
 
         if not self.training:
+            # Kail [Images][Boxlist]
             result = self.post_processor((class_logits, box_regression), proposals)
             return x, result, {}
 

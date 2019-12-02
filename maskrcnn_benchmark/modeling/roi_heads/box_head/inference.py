@@ -42,6 +42,7 @@ class PostProcessor(nn.Module):
         self.cls_agnostic_bbox_reg = cls_agnostic_bbox_reg
         self.bbox_aug_enabled = bbox_aug_enabled
 
+    # Kail boxes [Images][1000, 4]
     def forward(self, x, boxes):
         """
         Arguments:
@@ -54,17 +55,21 @@ class PostProcessor(nn.Module):
             results (list[BoxList]): one BoxList for each image, containing
                 the extra fields labels and scores
         """
+        # Kail [Images * 1000, num_classes] [N * 1000, num_classes * 4]
         class_logits, box_regression = x
         class_prob = F.softmax(class_logits, -1)
 
         # TODO think about a representation of batch of boxes
         image_shapes = [box.size for box in boxes]
+        # Kail [1000, 1000, 1000, ...]
         boxes_per_image = [len(box) for box in boxes]
         concat_boxes = torch.cat([a.bbox for a in boxes], dim=0)
 
         if self.cls_agnostic_bbox_reg:
             box_regression = box_regression[:, -4:]
         proposals = self.box_coder.decode(
+            # Kail box_regression [Images*1000, num_class * 4]
+            # Kail concat_boxes [Images*1000, 4]
             box_regression.view(sum(boxes_per_image), -1), concat_boxes
         )
         if self.cls_agnostic_bbox_reg:
@@ -72,7 +77,9 @@ class PostProcessor(nn.Module):
 
         num_classes = class_prob.shape[1]
 
+        # Kail [Images][1000, num_classes * 4]
         proposals = proposals.split(boxes_per_image, dim=0)
+        # Kail [Images][1000, num_classes]
         class_prob = class_prob.split(boxes_per_image, dim=0)
 
         results = []
@@ -84,6 +91,7 @@ class PostProcessor(nn.Module):
             if not self.bbox_aug_enabled:  # If bbox aug is enabled, we will do it later
                 boxlist = self.filter_results(boxlist, num_classes)
             results.append(boxlist)
+        # Kail [Images][Boxlist] Boxlist.bbox [1000 * num_classes, 4]
         return results
 
     def prepare_boxlist(self, boxes, scores, image_shape):

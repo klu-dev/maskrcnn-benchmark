@@ -71,10 +71,14 @@ class FPN2MLPFeatureExtractor(nn.Module):
         self.fc7 = make_fc(representation_size, representation_size, use_gn)
         self.out_channels = representation_size
 
+    # Kail x [features=5][N, C, H, W]
+    # Kail proposals [Images_N][FPN_POST_NMS_TOP_N_TEST/TRAIN, 4]
     def forward(self, x, proposals):
+        # Kail [N * 1000, 256, 7, 7]
         x = self.pooler(x, proposals)
         x = x.view(x.size(0), -1)
 
+        # Kail [N * 1000, 1024]
         x = F.relu(self.fc6(x))
         x = F.relu(self.fc7(x))
 

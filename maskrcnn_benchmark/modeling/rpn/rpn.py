@@ -96,6 +96,7 @@ class RPNHead(nn.Module):
             torch.nn.init.normal_(l.weight, std=0.01)
             torch.nn.init.constant_(l.bias, 0)
 
+    # Kail [features_idx=5][N, C, H, W]
     def forward(self, x):
         logits = []
         bbox_reg = []
@@ -137,6 +138,7 @@ class RPNModule(torch.nn.Module):
         self.box_selector_test = box_selector_test
         self.loss_evaluator = loss_evaluator
 
+    # Kail [features_idx=5][N, C, H, W]
     def forward(self, images, features, targets=None):
         """
         Arguments:
@@ -152,7 +154,10 @@ class RPNModule(torch.nn.Module):
             losses (dict[Tensor]): the losses for the model during training. During
                 testing, it is an empty dict.
         """
+        # Kail objectness [features_idx=5][N, A, H, W]
+        # Kail rpn_box_regression [features_idx=5][N, A * 4, H, W]
         objectness, rpn_box_regression = self.head(features)
+        # Kail anchors [Images_idx=N][features_idx=5][BoxList]
         anchors = self.anchor_generator(images, features)
 
         if self.training:
@@ -171,6 +176,7 @@ class RPNModule(torch.nn.Module):
             # For end-to-end models, anchors must be transformed into boxes and
             # sampled into a training batch.
             with torch.no_grad():
+                # Kail [N][fpnTopN + C, 4]
                 boxes = self.box_selector_train(
                     anchors, objectness, rpn_box_regression, targets
                 )

@@ -50,6 +50,8 @@ class RPNPostProcessor(torch.nn.Module):
         self.fpn_post_nms_top_n = fpn_post_nms_top_n
         self.fpn_post_nms_per_batch = fpn_post_nms_per_batch
 
+    # Kail proposals [N][fpnTopN, 4]
+    # Kail targets [N][C, 4]
     def add_gt_proposals(self, proposals, targets):
         """
         Arguments:
@@ -71,8 +73,15 @@ class RPNPostProcessor(torch.nn.Module):
             for proposal, gt_box in zip(proposals, gt_boxes)
         ]
 
+        # Kail [N][fpnTopN + C, 4]
         return proposals
 
+    # Kail anchors [Images_idx=N][BoxList]
+    # Kail objectness [N, A, H, W]
+    # Kail box_regression [N, A * 4, H, W]
+    # Kail Select pre_nms_top_n boxes according to objectness
+    # Kail Convert boxes tronsformation invariant values to sizes according to anchors
+    # Kail Select post_nms_top_n boxes
     def forward_for_single_feature_map(self, anchors, objectness, box_regression):
         """
         Arguments:
@@ -84,9 +93,11 @@ class RPNPostProcessor(torch.nn.Module):
         N, A, H, W = objectness.shape
 
         # put in the same format as anchors
+        # Kail (N, H * W * A, 1)
         objectness = permute_and_flatten(objectness, N, A, 1, H, W).view(N, -1)
         objectness = objectness.sigmoid()
 
+        # Kail (N, H * W * A, 4)
         box_regression = permute_and_flatten(box_regression, N, A, 4, H, W)
 
         num_anchors = A * H * W
@@ -98,13 +109,16 @@ class RPNPostProcessor(torch.nn.Module):
         box_regression = box_regression[batch_idx, topk_idx]
 
         image_shapes = [box.size for box in anchors]
+        # Kail (N, H * W * A, 4)
         concat_anchors = torch.cat([a.bbox for a in anchors], dim=0)
+        # Kail (N, topk, 4)
         concat_anchors = concat_anchors.reshape(N, -1, 4)[batch_idx, topk_idx]
 
         proposals = self.box_coder.decode(
             box_regression.view(-1, 4), concat_anchors.view(-1, 4)
         )
 
+        # Kail (N, topk, 4)
         proposals = proposals.view(N, -1, 4)
 
         result = []
@@ -120,8 +134,12 @@ class RPNPostProcessor(torch.nn.Module):
                 score_field="objectness",
             )
             result.append(boxlist)
+        # Kail [N][nmsTopN, 4]
         return result
 
+    # Kail anchors [Images_idx=N][features_idx=5][BoxList]
+    # Kail objectness [features_idx=5][N, A, H, W]
+    # Kail box_regression [features_idx=5][N, A * 4, H, W]
     def forward(self, anchors, objectness, box_regression, targets=None):
         """
         Arguments:
@@ -135,20 +153,30 @@ class RPNPostProcessor(torch.nn.Module):
         """
         sampled_boxes = []
         num_levels = len(objectness)
+        # Kail [features_idx=5][Images_idx=N][BoxList]
         anchors = list(zip(*anchors))
         for a, o, b in zip(anchors, objectness, box_regression):
+            # Kail Select nmsTopN boxes
+            # Kail Convert box_regression transformation invariants
+            # Kail value to sizes according to anchors
             sampled_boxes.append(self.forward_for_single_feature_map(a, o, b))
 
+        # Kail sampled_boxes [features_idx=5][N][nmsTopN, 4]
+        # Kail boxlists [N][features_idx=5][nmsTopN, 4]
         boxlists = list(zip(*sampled_boxes))
+        # Kail boxlists [N][features * nmsTopN, 4]
         boxlists = [cat_boxlist(boxlist) for boxlist in boxlists]
 
+        # Kail Consize boxes number to fpnTopN
         if num_levels > 1:
+            # Kail [N][fpnTopN, 4]
             boxlists = self.select_over_all_levels(boxlists)
 
         # append ground-truth bboxes to proposals
         if self.training and targets is not None:
             boxlists = self.add_gt_proposals(boxlists, targets)
 
+        # Kail [N][fpnTopN + C, 4]
         return boxlists
 
     def select_over_all_levels(self, boxlists):

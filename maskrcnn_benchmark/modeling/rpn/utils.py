@@ -14,6 +14,8 @@ def permute_and_flatten(layer, N, A, C, H, W):
     return layer
 
 
+# Kail objectness [features_idx=5][N, A, H, W]
+# Kail box_regression [features_idx=5][N, A * 4, H, W]
 def concat_box_prediction_layers(box_cls, box_regression):
     box_cls_flattened = []
     box_regression_flattened = []
@@ -28,11 +30,13 @@ def concat_box_prediction_layers(box_cls, box_regression):
         Ax4 = box_regression_per_level.shape[1]
         A = Ax4 // 4
         C = AxC // A
+        # Kail [N, H * W * A, C]
         box_cls_per_level = permute_and_flatten(
             box_cls_per_level, N, A, C, H, W
         )
         box_cls_flattened.append(box_cls_per_level)
 
+        # Kail [N, H * W * A, 4]
         box_regression_per_level = permute_and_flatten(
             box_regression_per_level, N, A, 4, H, W
         )
@@ -40,6 +44,8 @@ def concat_box_prediction_layers(box_cls, box_regression):
     # concatenate on the first dimension (representing the feature levels), to
     # take into account the way the labels were generated (with all feature maps
     # being concatenated as well)
+    # Kail [N * features * H * W * A, C]
     box_cls = cat(box_cls_flattened, dim=1).reshape(-1, C)
+    # Kail [N * features * H * W * A, 4]
     box_regression = cat(box_regression_flattened, dim=1).reshape(-1, 4)
     return box_cls, box_regression

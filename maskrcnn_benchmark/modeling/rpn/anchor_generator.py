@@ -109,6 +109,7 @@ class AnchorGenerator(nn.Module):
             inds_inside = torch.ones(anchors.shape[0], dtype=torch.bool, device=device)
         boxlist.add_field("visibility", inds_inside)
 
+    # Kail feature_maps [features_idx=5][N, C, H, W]
     def forward(self, image_list, feature_maps):
         grid_sizes = [feature_map.shape[-2:] for feature_map in feature_maps]
         anchors_over_all_feature_maps = self.grid_anchors(grid_sizes)
@@ -122,6 +123,7 @@ class AnchorGenerator(nn.Module):
                 self.add_visibility_to(boxlist)
                 anchors_in_image.append(boxlist)
             anchors.append(anchors_in_image)
+        # Kail [Images_idx=N][features_idx=5][BoxList]
         return anchors
 
 
